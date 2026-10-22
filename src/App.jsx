@@ -34,8 +34,19 @@ function checkWinner(board) {
   return null;
 }
 
-// Computer prioritizes winning, then blocking, then center/corners.
-function getComputerMove(board) {
+function getRandomMove(board) {
+  const emptyCells = board
+    .map((cell, index) => (!cell ? index : -1))
+    .filter((index) => index !== -1);
+
+  if (!emptyCells.length) return -1;
+
+  return emptyCells[
+    Math.floor(Math.random() * emptyCells.length)
+  ];
+}
+
+function getMediumMove(board) {
   for (const symbol of ["O", "X"]) {
     for (let i = 0; i < 9; i++) {
       if (board[i]) continue;
@@ -61,19 +72,68 @@ function getComputerMove(board) {
     ];
   }
 
-  const emptyCells = board
-    .map((cell, index) => (!cell ? index : -1))
-    .filter((index) => index !== -1);
+  return getRandomMove(board);
+}
 
-  if (!emptyCells.length) return -1;
+function getHardMove(board) {
+  function minimax(nextBoard, isComputerTurn, depth) {
+    const result = checkWinner(nextBoard);
 
-  return emptyCells[
-    Math.floor(Math.random() * emptyCells.length)
-  ];
+    if (result?.winner === "O") return 10 - depth;
+    if (result?.winner === "X") return depth - 10;
+    if (nextBoard.every(Boolean)) return 0;
+
+    let bestScore = isComputerTurn
+      ? Number.NEGATIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < nextBoard.length; index++) {
+      if (nextBoard[index]) continue;
+
+      nextBoard[index] = isComputerTurn ? "O" : "X";
+      const score = minimax(nextBoard, !isComputerTurn, depth + 1);
+      nextBoard[index] = "";
+
+      bestScore = isComputerTurn
+        ? Math.max(bestScore, score)
+        : Math.min(bestScore, score);
+    }
+
+    return bestScore;
+  }
+
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let bestMoves = [];
+
+  for (let index = 0; index < board.length; index++) {
+    if (board[index]) continue;
+
+    board[index] = "O";
+    const score = minimax(board, false, 1);
+    board[index] = "";
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMoves = [index];
+    } else if (score === bestScore) {
+      bestMoves.push(index);
+    }
+  }
+
+  if (!bestMoves.length) return -1;
+
+  return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+}
+
+function getComputerMove(board, difficulty) {
+  if (difficulty === "easy") return getRandomMove(board);
+  if (difficulty === "hard") return getHardMove(board);
+  return getMediumMove(board);
 }
 
 function App() {
   const [mode, setMode] = useState(null);
+  const [difficulty, setDifficulty] = useState("medium");
   const [board, setBoard] = useState(Array(9).fill(""));
   const [currentPlayer, setCurrentPlayer] = useState("X");
   const [winnerInfo, setWinnerInfo] = useState(null);
@@ -89,6 +149,13 @@ function App() {
   const isMachine = mode === "machine";
   const gameOver = Boolean(winnerInfo);
 
+  useEffect(() => {
+    if (!winnerInfo || winnerInfo.winner === "TIE") return;
+
+    const timer = setTimeout(() => setShowPopup(true), 600);
+    return () => clearTimeout(timer);
+  }, [winnerInfo]);
+
   // Computer's turn.
   useEffect(() => {
     if (
@@ -100,7 +167,7 @@ function App() {
     }
 
     const timer = setTimeout(() => {
-      const index = getComputerMove(board);
+      const index = getComputerMove(board, difficulty);
 
       if (index === -1) {
         setThinking(false);
@@ -117,7 +184,6 @@ function App() {
 
       if (result) {
         setWinnerInfo(result);
-        setShowPopup(true);
 
         setScores((previous) => ({
           ...previous,
@@ -143,7 +209,7 @@ function App() {
     }, 550);
 
     return () => clearTimeout(timer);
-  }, [mode, thinking, board, winnerInfo]);
+  }, [mode, difficulty, thinking, board, winnerInfo]);
 
   function handleClick(index) {
     if (
@@ -165,7 +231,6 @@ function App() {
 
     if (result) {
       setWinnerInfo(result);
-      setShowPopup(true);
 
       setScores((previous) => ({
         ...previous,
@@ -204,27 +269,47 @@ function App() {
     }
   }
 
-  function playAgain() {
+  function startRound(gameMode = mode) {
+    const machineStarts =
+      gameMode === "machine" && Math.random() >= 0.5;
+
     setBoard(Array(9).fill(""));
-    setCurrentPlayer("X");
+    setCurrentPlayer(machineStarts ? "O" : "X");
     setWinnerInfo(null);
     setShowPopup(false);
-    setThinking(false);
+    setThinking(machineStarts);
+  }
+
+  function playAgain() {
+    startRound();
   }
 
   function chooseMode(selectedMode) {
-    setMode(selectedMode);
     setScores({
       player1: 0,
       player2: 0,
       ties: 0,
     });
-    playAgain();
+    startRound(selectedMode === "machine" ? null : selectedMode);
+
+    if (selectedMode === "machine") {
+      setMode("difficulty");
+      setDifficulty("medium");
+      return;
+    }
+
+    setMode(selectedMode);
+  }
+
+  function startMachineGame() {
+    setMode("machine");
+    startRound("machine");
   }
 
   function changeMode() {
     setMode(null);
-    playAgain();
+    setDifficulty("medium");
+    startRound(null);
   }
 
   function resetScores() {
@@ -247,10 +332,119 @@ function App() {
 
   return (
     <main className="game-page">
+      <div className="blood-drips" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
       <div className="decor decor-left" />
       <div className="decor decor-right" />
 
-      {!mode ? (
+      {(mode === "human" || mode === "machine") && (
+        <div className="horror-floaters" aria-hidden="true">
+          <span>🦇</span>
+          <span>💀</span>
+          <span>👹</span>
+          <span>👻</span>
+          <span>👽</span>
+          <span>😈</span>
+          <span>🧟</span>
+          <span>🦇</span>
+          <span>💀</span>
+          <span>👿</span>
+          <span>👽</span>
+          <span>🧟</span>
+        </div>
+      )}
+
+      {mode === "difficulty" ? (
+        <section className="game-container mode-screen difficulty-screen">
+          <button
+            type="button"
+            className="screen-home-button"
+            onClick={changeMode}
+          >
+            <span aria-hidden="true">←</span> Home
+          </button>
+
+          <header className="game-header">
+            <div className="eyebrow">
+              <span className="live-dot" />
+              PICK YOUR CHALLENGE
+            </div>
+
+            <h1>
+              Choose <span>Level</span>
+              <span className="title-sparkle">✦</span>
+            </h1>
+
+            <p className="subtitle">
+              Select a difficulty. You or the machine will start at random.
+            </p>
+          </header>
+
+          <div className="difficulty-options" role="group" aria-label="Choose difficulty">
+            {[
+              {
+                id: "easy",
+                title: "Easy",
+                description: "A relaxed warm-up",
+                icon: "🌱",
+              },
+              {
+                id: "medium",
+                title: "Medium",
+                description: "A clever challenge",
+                icon: "⚡",
+              },
+              {
+                id: "hard",
+                title: "Hard",
+                description: "Can you beat the unbeatable?",
+                icon: "🔥",
+              },
+            ].map((level) => (
+              <button
+                key={level.id}
+                type="button"
+                className={`difficulty-card difficulty-${level.id} ${difficulty === level.id ? "selected-difficulty" : ""
+                  }`}
+                onClick={() => setDifficulty(level.id)}
+                aria-pressed={difficulty === level.id}
+              >
+                <span className="difficulty-icon" aria-hidden="true">
+                  {level.icon}
+                </span>
+                <span className="difficulty-copy">
+                  <strong>{level.title}</strong>
+                  <small>{level.description}</small>
+                </span>
+                <span className="difficulty-check" aria-hidden="true">
+                  ✓
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className="start-game-button"
+            onClick={startMachineGame}
+          >
+            Start Game <span aria-hidden="true">→</span>
+          </button>
+
+        </section>
+      ) : !mode ? (
         <section className="game-container mode-screen">
           <header className="game-header">
             <div className="eyebrow">
@@ -317,6 +511,14 @@ function App() {
         </section>
       ) : (
         <section className="game-container">
+          <button
+            type="button"
+            className="screen-home-button"
+            onClick={changeMode}
+          >
+            <span aria-hidden="true">←</span> Home
+          </button>
+
           <header className="game-header">
             <div className="eyebrow">
               <span className="live-dot" />
@@ -332,16 +534,23 @@ function App() {
 
             <p className="subtitle">
               {isMachine
-                ? "Can you beat the machine?"
+                ? `Can you beat the machine on ${difficulty} mode?`
                 : "Two Players. One Board. Who will win?"}
             </p>
           </header>
 
+          {isMachine && (
+            <div className={`active-difficulty difficulty-tag-${difficulty}`}>
+              {difficulty === "easy" ? "🌱" : difficulty === "medium" ? "⚡" : "🔥"}
+              <span>{difficulty} mode</span>
+            </div>
+          )}
+
           <section className="score-panel">
             <div
               className={`score-card player-one ${!gameOver && currentPlayer === "X"
-                  ? "active-player"
-                  : ""
+                ? "active-player"
+                : ""
                 }`}
             >
               <div className="score-symbol x-symbol">X</div>
@@ -359,8 +568,8 @@ function App() {
 
             <div
               className={`score-card player-two ${!gameOver && currentPlayer === "O"
-                  ? "active-player"
-                  : ""
+                ? "active-player"
+                : ""
                 }`}
             >
               <div className="score-symbol o-symbol">O</div>
@@ -397,10 +606,10 @@ function App() {
                   key={index}
                   type="button"
                   className={`cell ${cell === "X"
-                      ? "cell-x"
-                      : cell === "O"
-                        ? "cell-o"
-                        : ""
+                    ? "cell-x"
+                    : cell === "O"
+                      ? "cell-o"
+                      : ""
                     } ${winnerInfo?.combination?.includes(index)
                       ? "winning-cell"
                       : ""
@@ -453,7 +662,7 @@ function App() {
               className="change-mode-button"
               onClick={changeMode}
             >
-              ← Change Game Mode
+              ← Home / Change Game Mode
             </button>
           </div>
 
@@ -558,6 +767,14 @@ function App() {
               onClick={() => setShowPopup(false)}
             >
               ◉ View the Board
+            </button>
+
+            <button
+              type="button"
+              className="popup-home-button"
+              onClick={changeMode}
+            >
+              ← Back to Home
             </button>
           </section>
         </div>

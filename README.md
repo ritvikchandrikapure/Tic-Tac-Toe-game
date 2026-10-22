@@ -16,9 +16,10 @@ A responsive Tic Tac Toe game built with **React**, **Vite**, and **CSS**. Play 
 ## Features
 
 - Two game modes: **2 Players** and **Play vs Machine**.
+- Three computer difficulty levels: **Easy**, **Medium**, and **Hard**.
 - Interactive 3 × 3 game board.
 - Detects a win when a player gets three marks in a row, column, or diagonal.
-- Highlights the winning line.
+- Animates and highlights the winning line.
 - Displays the round result.
 - Tracks player wins and draws.
 - Play Again and Reset Scores controls.
