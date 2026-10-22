@@ -351,17 +351,12 @@ function App() {
 
       {(mode === "human" || mode === "machine") && (
         <div className="horror-floaters" aria-hidden="true">
-          <span>🦇</span>
           <span>💀</span>
           <span>👹</span>
           <span>👻</span>
           <span>👽</span>
-          <span>😈</span>
-          <span>🧟</span>
           <span>🦇</span>
-          <span>💀</span>
           <span>👿</span>
-          <span>👽</span>
           <span>🧟</span>
         </div>
       )}
